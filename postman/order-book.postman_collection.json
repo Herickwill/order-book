@@ -1,0 +1,628 @@
+{
+  "info": {
+    "name": "Order Book - Vibranium",
+    "description": "Importe e rode pelo Runner. A URL da API fica na variável baseUrl.\n\nO Worker processa os comandos logo depois de a API gravá-los. Com o Worker parado, as ordens aparecem como RECEIVED e os saldos ficam zerados.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "runId",
+      "value": "manual"
+    },
+    {
+      "key": "comprador",
+      "value": "comprador-manual"
+    },
+    {
+      "key": "vendedor",
+      "value": "vendedor-manual"
+    },
+    {
+      "key": "buyOrderId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Fluxo principal",
+      "description": "Rode na ordem, pelo Runner. O passo 1 cria usuários novos a cada execução.",
+      "item": [
+        {
+          "name": "1. Depositar 1.000 BRL para o comprador",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Usuários novos a cada execução: a collection roda quantas vezes quiser sem limpar o banco.",
+                  "const runId = Date.now().toString(36);",
+                  "pm.collectionVariables.set(\"runId\", runId);",
+                  "pm.collectionVariables.set(\"comprador\", \"comprador-\" + runId);",
+                  "pm.collectionVariables.set(\"vendedor\", \"vendedor-\" + runId);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/deposits",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{comprador}}\",\n  \"depositId\": \"brl-{{runId}}\",\n  \"asset\": \"BRL\",\n  \"amount\": 1000.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. Depositar 50 VIB para o vendedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/deposits",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{vendedor}}\",\n  \"depositId\": \"vib-{{runId}}\",\n  \"asset\": \"VIB\",\n  \"amount\": 50\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "3. Comprador envia ordem de compra",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 202\", () => pm.response.to.have.status(202));",
+                  "pm.collectionVariables.set(\"buyOrderId\", pm.response.json().orderId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{comprador}}\",\n  \"clientOrderId\": \"compra-{{runId}}\",\n  \"side\": \"BUY\",\n  \"type\": \"LIMIT\",\n  \"price\": 10.5,\n  \"quantity\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "4. Reenviar a mesma ordem (não duplica)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Devolve a mesma ordem\", () => {",
+                  "    pm.expect(pm.response.json().orderId).to.eql(pm.collectionVariables.get(\"buyOrderId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "description": "Mesmo clientOrderId: simula um robô reenviando após um timeout.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{comprador}}\",\n  \"clientOrderId\": \"compra-{{runId}}\",\n  \"side\": \"BUY\",\n  \"type\": \"LIMIT\",\n  \"price\": 10.5,\n  \"quantity\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "5. Vendedor envia ordem de venda",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{vendedor}}\",\n  \"clientOrderId\": \"venda-{{runId}}\",\n  \"side\": \"SELL\",\n  \"type\": \"LIMIT\",\n  \"price\": 10.0,\n  \"quantity\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "6. Ver ordens de venda disponíveis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders?side=SELL",
+            "description": "Ordens de venda abertas, da próxima a ser executada para a última. Uma ordem totalmente comprada sai da lista."
+          }
+        },
+        {
+          "name": "7. Ver ordens de compra disponíveis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders?side=BUY"
+          }
+        },
+        {
+          "name": "8. Consultar ordem de compra",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Devolve a ordem consultada\", () => {",
+                  "    pm.expect(pm.response.json().orderId).to.eql(pm.collectionVariables.get(\"buyOrderId\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{buyOrderId}}"
+          }
+        },
+        {
+          "name": "9. Consultar carteira do comprador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Traz BRL e VIB\", () => {",
+                  "    const assets = pm.response.json().balances.map(b => b.asset);",
+                  "    pm.expect(assets).to.eql([\"BRL\", \"VIB\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/wallets/{{comprador}}"
+          }
+        },
+        {
+          "name": "10. Consultar trades do comprador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/trades?userId={{comprador}}"
+          }
+        },
+        {
+          "name": "11. Consultar extrato do comprador",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Lista de lançamentos\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.userId).to.eql(pm.collectionVariables.get(\"comprador\"));",
+                  "    pm.expect(body.items).to.be.an(\"array\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/wallets/{{comprador}}/statement"
+          }
+        },
+        {
+          "name": "12. Cancelar ordem de compra",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 202\", () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/orders/{{buyOrderId}}?userId={{comprador}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Erros comuns",
+      "description": "Exemplos de requisições recusadas, com a mensagem de erro de cada uma.",
+      "item": [
+        {
+          "name": "Ordem MARKET com preço",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo price\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"price\");",
+                  "    pm.expect(error.message).to.eql(\"Ordens MARKET não aceitam price.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{comprador}}\",\n  \"clientOrderId\": \"erro-{{runId}}\",\n  \"side\": \"BUY\",\n  \"type\": \"MARKET\",\n  \"price\": 10,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Depósito de VIB fracionado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo amount\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"amount\");",
+                  "    pm.expect(error.message).to.eql(\"O amount de um depósito de VIB deve ser um número inteiro.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/deposits",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{vendedor}}\",\n  \"depositId\": \"erro-{{runId}}\",\n  \"asset\": \"VIB\",\n  \"amount\": 2.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Ordem inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders/00000000-0000-0000-0000-000000000000"
+          }
+        },
+        {
+          "name": "Ordem com side inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo side\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"side\");",
+                  "    pm.expect(error.message).to.eql(\"O side deve ser BUY ou SELL.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{comprador}}\",\n  \"clientOrderId\": \"erro-side-{{runId}}\",\n  \"side\": \"COMPRA\",\n  \"type\": \"LIMIT\",\n  \"price\": 10,\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Depósito sem userId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo userId\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"userId\");",
+                  "    pm.expect(error.message).to.eql(\"O userId é obrigatório.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/deposits",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depositId\": \"erro-user-{{runId}}\",\n  \"asset\": \"BRL\",\n  \"amount\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Cancelamento com orderId inválido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo orderId\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"orderId\");",
+                  "    pm.expect(error.message).to.eql(\"O orderId deve ser um UUID válido.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/orders/abc?userId={{comprador}}"
+          }
+        },
+        {
+          "name": "Listagem com size fora do limite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo size\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"size\");",
+                  "    pm.expect(error.message).to.eql(\"O size deve estar entre 1 e 100.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/orders?side=SELL&size=101"
+          }
+        },
+        {
+          "name": "Extrato com size fora do limite",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"Erro no campo size\", () => {",
+                  "    const error = pm.response.json().errors.find(e => e.field === \"size\");",
+                  "    pm.expect(error.message).to.eql(\"O size deve estar entre 1 e 100.\");",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/wallets/{{comprador}}/statement?size=101"
+          }
+        },
+        {
+          "name": "Método não suportado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 405\", () => pm.response.to.have.status(405));",
+                  "pm.test(\"Resposta é Problem Detail\", () => pm.expect(pm.response.json().status).to.eql(405));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/orders"
+          }
+        }
+      ]
+    }
+  ]
+}

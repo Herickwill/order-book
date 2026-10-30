@@ -1,0 +1,12 @@
+# Contexto da imagem da aplicacao: so os poms e o codigo dos tres modulos.
+# Fica ao lado de app.Dockerfile para nao alterar o .dockerignore da raiz,
+# que serve ao Dockerfile do Postgres (BuildKit le <Dockerfile>.dockerignore).
+**
+!pom.xml
+!order-book-shared/pom.xml
+!order-book-shared/src/**
+!order-book-api/pom.xml
+!order-book-api/src/**
+!order-book-worker/pom.xml
+!order-book-worker/src/**
+**/target

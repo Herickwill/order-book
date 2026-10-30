@@ -1,0 +1,56 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.meli</groupId>
+        <artifactId>order-book</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>order-book-worker</artifactId>
+    <packaging>jar</packaging>
+    <name>order-book-worker</name>
+
+    <!--
+        Motor de matching, liquidação e loop do Worker.
+        Os pacotes matching, settlement e processing são Java puro; Spring e
+        JDBC ficam em persistence e na raiz do módulo.
+        Sem servidor web: o Worker não recebe requisições.
+    -->
+
+    <dependencies>
+        <!-- Tipos de domínio compartilhados com a API -->
+        <dependency>
+            <groupId>com.meli</groupId>
+            <artifactId>order-book-shared</artifactId>
+        </dependency>
+
+        <!-- Banco: JdbcClient, NamedParameterJdbcTemplate (escrita em lote), Hikari, transação -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Testes: JUnit, AssertJ e Mockito, versões gerenciadas pelo Spring Boot -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

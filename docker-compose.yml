@@ -1,0 +1,78 @@
+# Sobe o order book inteiro: docker compose up --build
+#
+#   postgres  schema criado de db/*.sql no primeiro start (volume vazio)
+#   api       http://localhost:8080 (stateless; para varias instancias atras
+#             de um nginx, ver docker-compose.scale.yml)
+#   worker    unico processo que altera ordens, trades e saldos. Um segundo
+#             (--scale worker=2) fica esperando o advisory lock do Postgres
+#
+# Banco do zero: docker compose down -v (APAGA os dados)
+
+name: order-book
+
+x-database-env: &database-env
+  DB_URL: jdbc:postgresql://postgres:5432/order_book
+  DB_USER: order_book
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-order_book_local}
+
+services:
+  postgres:
+    build: .
+    image: order-book-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-order_book_local}
+    ports:
+      # So na maquina local: para psql, check-invariants.sql e as ferramentas.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      # O entrypoint do Postgres roda db/*.sql em ordem lexica so com o volume
+      # vazio, e ignora a subpasta db/dev/. A aplicacao nunca cria schema.
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Por TCP, e nao pelo socket: enquanto roda db/*.sql, o Postgres sobe um
+      # servidor temporario so no socket local, e o pg_isready padrao diria
+      # "pronto" antes da hora.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U order_book -d order_book"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      args:
+        MODULE: order-book-api
+    image: order-book-api
+    environment:
+      <<: *database-env
+      # Conexoes por instancia da API (padrao 16). Teste de carga: API_DB_POOL_SIZE=64
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${API_DB_POOL_SIZE:-16}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      args:
+        MODULE: order-book-worker
+    image: order-book-worker
+    environment: *database-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Qualquer falha encerra o Worker; ele sobe de novo e reconstroi o estado
+    # a partir do banco, sem perder nem repetir comandos.
+    restart: always
+    # SIGTERM deixa o lote corrente terminar (o Worker espera ate 20 s).
+    stop_grace_period: 30s
+
+volumes:
+  pgdata:

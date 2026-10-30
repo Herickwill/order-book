@@ -1,0 +1,38 @@
+@startuml fluxo-cancelamento
+!theme plain
+skinparam defaultFontName "Helvetica"
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 18
+skinparam noteBackgroundColor #FFFBEA
+skinparam noteBorderColor #C9B458
+
+title Fluxo de um cancelamento (DELETE /orders/{orderId})
+
+actor Cliente
+participant "API" as API
+database "commands\n(inbox)" as Inbox
+participant "Worker\n(livro e carteiras em memória)" as Worker
+database "orders · wallets" as Tables
+
+== Aceite (síncrono) ==
+Cliente -> API : DELETE /orders/{orderId}?userId=
+API -> Inbox : INSERT CANCEL_ORDER (RECEIVED)\nchave = cancel:orderId (cancelar duas vezes não duplica)
+API --> Cliente : 202 (ou 200 no reenvio)
+note right of API
+  A API não decide se dá para cancelar:
+  a ordem pode estar executando agora.
+  Quem decide é o Worker, na ordem da fila.
+end note
+
+== Processamento (assíncrono) ==
+Worker -> Inbox : lê o comando, na mesma fila das ordens
+alt ordem aberta no livro e do mesmo usuário
+  Worker -> Worker : tira a ordem do livro
+  Worker -> Worker : devolve a reserva do que faltava executar\ncompra: preço × restante em BRL · venda: restante em VIB
+  Worker -> Tables : ordem CANCELLED (o já executado fica)\n+ carteira + comando PROCESSED
+else já executada, já cancelada, MARKET ou de outro usuário
+  Worker -> Worker : ignora (log WARN)
+  Worker -> Inbox : só marca o comando PROCESSED
+end
+@enduml

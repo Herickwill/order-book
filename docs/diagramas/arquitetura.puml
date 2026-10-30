@@ -1,0 +1,43 @@
+@startuml arquitetura
+!pragma layout smetana
+!theme plain
+skinparam defaultFontName "Helvetica"
+skinparam componentStyle rectangle
+skinparam nodesep 60
+skinparam ranksep 70
+skinparam noteBackgroundColor #FFFBEA
+skinparam noteBorderColor #C9B458
+
+title Arquitetura: a API só enfileira, o Worker é o único escritor do estado
+
+actor "Cliente / robô" as Cliente
+
+rectangle "docker compose" {
+  component "API\n(stateless, 1..N instâncias)" as API
+  component "Worker\n**único escritor**\nlivro + carteiras em memória" as Worker #E8F1FF
+  component "Worker em espera\n(opcional)" as Standby #F4F4F4
+
+  database "PostgreSQL" {
+    collections "commands\n(fila de comandos)" as Inbox
+    collections "orders · trades · wallets\n(estado de negócio)" as State
+  }
+}
+
+Cliente --> API : HTTP\nordens, depósitos,\ncancelamentos, consultas
+
+API -[#2E7D32,bold]-> Inbox : INSERT do comando\n(a única escrita da API)
+API ..> State : SELECT\n(leituras)
+
+Inbox -[#1565C0,bold]-> Worker : lote de até 500 comandos,\nem ordem de id
+Worker -[#C62828,bold]-> State : 1 transação por lote:\nordens, trades, carteiras\n+ comandos PROCESSED
+
+Standby ..> Worker : espera o advisory lock;\nassume se o primeiro cair
+
+note right of Worker
+  Single Writer: só esta thread altera
+  ordens, trades e saldos. Sem lock,
+  sem corrida, ordem total garantida
+  pela fila. Unicidade garantida pelo
+  advisory lock do Postgres.
+end note
+@enduml

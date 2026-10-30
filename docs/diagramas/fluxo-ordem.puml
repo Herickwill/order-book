@@ -1,0 +1,48 @@
+@startuml fluxo-ordem
+!theme plain
+skinparam defaultFontName "Helvetica"
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 18
+skinparam BoxPadding 8
+skinparam noteBackgroundColor #FFFBEA
+skinparam noteBorderColor #C9B458
+
+title Fluxo de uma ordem (POST /orders)
+
+actor Cliente
+participant "API" as API
+database "commands\n(inbox)" as Inbox
+participant "Worker\n(livro e carteiras em memória)" as Worker
+database "orders · trades\nwallets" as Tables
+
+== Aceite (síncrono) ==
+Cliente -> API : POST /orders\n{userId, clientOrderId, side, type, price?, quantity}
+API -> API : valida o formato\n(não olha saldo)
+API -> Inbox : INSERT NEW_ORDER (RECEIVED)\nON CONFLICT (userId, chave) DO NOTHING
+API --> Cliente : 202 {orderId, RECEIVED}\nreenvio do mesmo clientOrderId: 200, mesmo orderId
+
+== Processamento (assíncrono, milissegundos depois) ==
+Worker -> Inbox : lê até 500 comandos RECEIVED, em ordem de id
+group em memória, um comando por vez
+  Worker -> Worker : reserva o saldo\nLIMIT: preço × quantidade · MARKET: todo o BRL
+  alt saldo insuficiente
+    Worker -> Worker : REJECTED (nada muda no saldo)
+  else saldo reservado
+    Worker -> Worker : cruza com o livro\nmelhor preço primeiro; no mesmo preço, o mais antigo
+    Worker -> Worker : cada trade sai ao preço de quem já estava no livro\ncomprador: −BRL +VIB · vendedor: +BRL −VIB
+    Worker -> Worker : sobra da LIMIT descansa no livro\nsobra da MARKET é cancelada e a reserva volta
+  end
+end
+Worker -> Tables : uma transação: ordens, trades, carteiras\n+ comandos marcados PROCESSED
+note right of Worker
+  Se o commit falhar, o Worker encerra
+  e reconstrói o estado do banco ao subir.
+  Nenhum comando é aplicado duas vezes.
+end note
+
+== Consulta ==
+Cliente -> API : GET /orders/{orderId}
+API -> Tables : SELECT (ou RECEIVED, se ainda na fila)
+API --> Cliente : 200 {status: FILLED | PARTIALLY_FILLED | NEW | ...}
+@enduml

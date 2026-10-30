@@ -1,0 +1,38 @@
+@startuml fluxo-deposito
+!theme plain
+skinparam defaultFontName "Helvetica"
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam ParticipantPadding 18
+skinparam noteBackgroundColor #FFFBEA
+skinparam noteBorderColor #C9B458
+
+title Fluxo de um depósito (POST /deposits)
+
+actor Cliente
+participant "API" as API
+database "commands\n(inbox)" as Inbox
+participant "Worker\n(carteiras em memória)" as Worker
+database "wallets" as Wallets
+
+== Aceite (síncrono) ==
+Cliente -> API : POST /deposits\n{userId, depositId, asset: BRL | VIB, amount}
+API -> API : valida o formato\n(amount > 0; VIB só em unidades inteiras)
+API -> Inbox : INSERT DEPOSIT (RECEIVED)\nchave de idempotência = depositId
+API --> Cliente : 202 {depositId, RECEIVED}\nreenvio do mesmo depositId: 200, sem duplicar
+
+== Processamento (assíncrono) ==
+Worker -> Inbox : lê o comando, na mesma fila das ordens
+Worker -> Worker : available += amount\n(a carteira nasce no primeiro depósito)
+Worker -> Wallets : grava a carteira + comando PROCESSED\nna transação do lote
+note right of Worker
+  Depósito e ordens passam pela mesma fila:
+  uma ordem enviada depois do depósito
+  sempre enxerga o saldo creditado.
+end note
+
+== Consulta ==
+Cliente -> API : GET /wallets/{userId}
+API -> Wallets : SELECT
+API --> Cliente : 200 {available, reserved} de BRL e VIB
+@enduml

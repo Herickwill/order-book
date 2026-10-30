@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Os testes do ApiExceptionHandler provocam erros de propósito, e o handler os
+  loga com stack trace. O log não é contrato de teste; aqui ele só polui a saída.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+    <logger name="com.meli.orderbook.api.common.ApiExceptionHandler" level="OFF"/>
+</configuration>
