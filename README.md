@@ -19,12 +19,9 @@ Sobem três containers: **postgres** (schema criado de `db/*.sql` no primeiro st
 
 ## Premissas
 
-Pontos em que o enunciado deixa margem, e o que foi adotado:
-
-- **Escala:** o texto fala em 5.000 *trades*/s num trecho e 5.000 *requests*/s em
-  outro. O alvo adotado é **5.000 req/s de envio de ordens**; os trades resultantes
+- **Escala:** O alvo adotado é **5.000 req/s de envio de ordens**; os trades resultantes
   são medidos e reportados no teste de carga.
-- **Tipos de ordem:** o enunciado não fixa tipos. Foram implementados os dois
+- **Tipos de ordem:** Foram implementados os dois
   básicos de um livro: **LIMIT** e **MARKET** (executa o que der na hora e cancela o resto).
 - **Unidades:** VIB em unidades inteiras; BRL com 2 casas decimais.
 - **Saldo inicial:** não há cadastro. A carteira nasce no primeiro **depósito**, que
@@ -304,7 +301,7 @@ Erros de validação respondem **400** com uma mensagem por campo.
 - **Outros tipos de ordem** (stop, iceberg, post-only): LIMIT e MARKET são os
   tipos básicos de um livro, e cada tipo novo traz estados e casos de borda sem
   ganho para o MVP.
-- **Saque, autenticação e cadastro de usuários**: dispensados pelo enunciado; o
+- **Saque, autenticação e cadastro de usuários**: dispensados; o
   `userId` vem na requisição (ver [Premissas](#premissas)).
 - **Mais de um ativo**: só VIB/BRL. O caminho para crescer é um Worker por ativo.
 - **Self-trade prevention**: um usuário pode cruzar com a própria ordem; os
