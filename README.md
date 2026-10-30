@@ -327,8 +327,7 @@ Diagramas de sequência, passo a passo:
 
 ### Single Writer Principle
 
-O desenho segue o *Single Writer Principle*, popularizado pela LMAX (uma bolsa
-que processa milhões de ordens por segundo numa única thread): **cada estado
+O desenho segue o *Single Writer Principle*: **cada estado
 mutável tem exatamente um escritor**; os demais só leem ou enviam mensagens a ele.
 
 | Estado | Quem escreve | Os demais |
@@ -392,11 +391,11 @@ máquina**: gerador de carga, nginx, 4 instâncias da API, Postgres e Worker.
 | Fila do Worker ao fim da carga | **0** |
 | CPU (100% = 1 thread) | Postgres 223% · gerador 165% · nginx 99% · cada API ~45% · Worker 19% |
 
-**O que descobrimos:**
+**O que foi observado:**
 
-- **O Worker não é o gargalo.** Com 19% de CPU ele acompanhou ~4.400 ordens/s
-  e terminou com a fila vazia: a parte serializada do desenho tem folga.
-- **As APIs estavam folgadas** (~45% de CPU cada), e o container mais ocupado
+- **O Worker não é o gargalo e teve uma performance excelente.** Com 19% de CPU ele acompanhou ~4.400 ordens/s
+  e terminou com a fila vazia.
+- **As APIs não afogaram** (~45% de CPU cada), e o container mais ocupado
   foi o **Postgres**, que faz um commit durável por requisição aceita.
 - Os 5.000 req/s não foram sustentados por inteiro **numa máquina só**, que
   ainda dividia CPU com o próprio gerador de carga. Os próximos passos seriam
