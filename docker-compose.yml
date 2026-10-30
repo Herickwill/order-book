@@ -22,7 +22,7 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-order_book_local}
     ports:
-      # So na maquina local: para psql, check-invariants.sql e as ferramentas.
+      # So na maquina local: para psql e as ferramentas.
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql
